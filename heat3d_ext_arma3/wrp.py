@@ -249,8 +249,18 @@ def read_wrp(data: bytes) -> Wrp:
             raise
         raise WrpError(f"the quad trees end early: {exc}") from None
     heights, at = _find_heights(data, at, lx, mx, notes)
-    models, at = _find_models(data, at)
-    objects = _find_objects(data, at, len(models), size, notes)
+    empty = np.zeros(0, dtype=[("id", "<u4"), ("model", "<u4"), ("m", "<f4", 12)])
+    try:
+        models, at = _find_models(data, at)
+    except WrpError:
+        # A terrain with nothing placed on it (the virtual-reality world) has no model list.
+        notes.append("no models placed on this terrain")
+        return Wrp(version, (lx, ly), (mx, my), cell, heights, [], empty, notes)
+    try:
+        objects = _find_objects(data, at, len(models), size, notes)
+    except WrpError:
+        notes.append("no placed objects found")
+        objects = empty
     return Wrp(version, (lx, ly), (mx, my), cell, heights, models, objects, notes)
 
 

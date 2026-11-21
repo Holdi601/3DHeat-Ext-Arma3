@@ -139,7 +139,15 @@ def weapons(game: Game) -> list[dict]:
         wtype = cls.get("type")
         scope = cls.get("scope")
         name = game.text(cls.get("displayName", ""))
-        names = " ".join(n.lower() for n in cls.ancestors())
+        chain = [n.lower() for n in cls.ancestors()]
+        names = " ".join(chain)
+        if not isinstance(wtype, int):
+            # The slot type is not always set along the chain the configs give; the base classes say it as well.
+            wtype = (1 if any(n in ("rifle", "rifle_base_f", "riflecore") for n in chain)
+                     else 2 if any(n in ("pistol", "pistol_base_f", "pistolcore") for n in chain)
+                     else 4 if any(n in ("launcher", "launcher_base_f", "launchercore") for n in chain)
+                     else 65536 if any(n in ("cannoncore", "mgun", "rocketpods", "missilelauncher") for n in chain)
+                     else None)
         if wtype == 65536:
             if not (isinstance(scope, int) and scope >= 1 and name):
                 continue

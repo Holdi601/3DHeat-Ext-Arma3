@@ -85,14 +85,15 @@ class Game:
         if self._config is None:
             configs = []
             for pbo in self.fs.pbos:
-                if "config.bin" not in pbo:
-                    if "config.cpp" in pbo:
-                        self.config_notes[str(pbo.path)] = "text config (config.cpp) not read"
-                    continue
-                try:
-                    configs.append((str(pbo.path), read_rap(pbo.read("config.bin"))))
-                except (ConfigError, PboError) as exc:
-                    self.config_notes[str(pbo.path)] = f"config not readable: {exc}"
+                # An archive holds a config.bin at its root and often one per subfolder (one per vehicle).
+                names = [k for k in pbo.entries if k == "config.bin" or k.endswith("\\config.bin")]
+                if not names and any(k == "config.cpp" or k.endswith("\\config.cpp") for k in pbo.entries):
+                    self.config_notes[str(pbo.path)] = "text config (config.cpp) not read"
+                for name in sorted(names, key=lambda k: (k.count("\\"), k)):
+                    try:
+                        configs.append((f"{pbo.path}:{name}", read_rap(pbo.read(name))))
+                    except (ConfigError, PboError) as exc:
+                        self.config_notes[f"{pbo.path}:{name}"] = f"config not readable: {exc}"
             self._config = merged(configs)
         return self._config
 

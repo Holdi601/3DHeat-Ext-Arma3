@@ -126,6 +126,13 @@ def test_wrp_synthetic(version):
     assert np.allclose(t.objects["m"][5, 9:], [25, 1, 40])
 
 
+def test_wrp_with_nothing_placed():
+    # the virtual-reality world: heights, no model list, no objects
+    h, _size = _terrain()
+    t = wrp.read_wrp(wrp.write_wrp(h, 32, 10.0, [], []))
+    assert np.allclose(t.heights, h) and t.models == [] and len(t.objects) == 0
+
+
 def test_wrp_rejects_other_files():
     with pytest.raises(wrp.WrpError):
         wrp.read_wrp(b"8WVR" + bytes(100))

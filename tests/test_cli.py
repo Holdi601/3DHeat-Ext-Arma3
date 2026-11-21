@@ -52,7 +52,8 @@ def _install(root, world_version=25):
         },
         "class CfgWeapons": {"class Rifle_Base_F": {"type": 1}, "class arifle_MX_F: Rifle_Base_F": {"scope": 2, "displayName": "MX 6.5 mm"}},
     })
-    pbo.write_pbo(addons / "vehicles_f.pbo", {"config.bin": vehicles}, {"prefix": "a3\\vehicles_f"})
+    # as in the game: a config.bin per vehicle subfolder, none at the archive's root
+    pbo.write_pbo(addons / "vehicles_f.pbo", {"mbt_01\\config.bin": vehicles}, {"prefix": "a3\\vehicles_f"})
     (root / "Expansion" / "Addons").mkdir(parents=True)
     (root / "Expansion" / "Addons" / "locked.ebo").write_bytes(b"encrypted")
     return h
@@ -67,10 +68,9 @@ def _run(capsys, *argv):
 def test_no_install(tmp_path, capsys, monkeypatch):
     monkeypatch.delenv("ARMA3_PATH", raising=False)
     code, _out, err = _run(capsys, "find", "--install", str(tmp_path / "nothing"), "--levels", str(tmp_path / "lv"))
-    assert "--install" in err
     if code == 0:
         pytest.skip("a real Arma 3 install was found")
-    assert code == 2
+    assert code == 2 and "--install" in err
 
 
 def test_end_to_end(tmp_path, capsys):

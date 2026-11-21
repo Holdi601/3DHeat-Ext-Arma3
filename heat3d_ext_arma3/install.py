@@ -22,7 +22,7 @@ FOLDER = "Arma 3"
 DLC_NAMES = {
     "": "Arma 3", "curator": "Zeus", "kart": "Karts", "heli": "Helicopters", "mark": "Marksmen", "expansion": "Apex",
     "jets": "Jets", "argo": "Malden 2035", "orange": "Laws of War", "tacops": "Tac-Ops", "tank": "Tanks",
-    "enoch": "Contact", "aow": "Art of War", "gm": "Global Mobilization", "vn": "S.O.G. Prairie Fire",
+    "enoch": "Contact", "contact": "Contact (platform)", "aow": "Art of War", "gm": "Global Mobilization", "vn": "S.O.G. Prairie Fire",
     "csla": "CSLA Iron Curtain", "ws": "Western Sahara", "spe": "Spearhead 1944", "rf": "Reaction Forces",
     "ef": "Expeditionary Forces",
 }

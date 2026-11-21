@@ -1,0 +1,8 @@
+{
+  "spec": "heat3d_ext_arma3.standalone_spec",
+  "collect_submodules": ["numpy", "PIL", "heat3d_gamefiles"],
+  "platforms": {
+    "windows-x64": {"build": true, "tested": true, "note": "Arma 3 on Steam; CI builds and smoke-runs, levels checked on a real install"},
+    "linux-x64": {"build": true, "tested": false, "note": "Arma 3 under Proton or native Steam found; CI builds and smoke-runs"}
+  }
+}
