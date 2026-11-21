@@ -1,0 +1,44 @@
+"""
+Finding 3DHeat GameFiles, the library the levels are written with (its glTF writer).
+
+Installed by pip it is simply importable. From a plain checkout it is looked for in `HEAT3D_GAMEFILES`, then in
+`../../gamefiles` (this tool inside a 3DHeat checkout), then in `../3DHeat-GameFiles` (the two side by side).
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+MISSING = (
+    "needs 3DHeat GameFiles: pip install https://github.com/Holdi601/3DHeat-GameFiles/archive/refs/tags/v1.1.0.zip, "
+    "or set HEAT3D_GAMEFILES to its folder"
+)
+
+
+def candidates() -> list[Path]:
+    repo = Path(__file__).resolve().parents[1]
+    found = [Path(os.environ["HEAT3D_GAMEFILES"])] if os.environ.get("HEAT3D_GAMEFILES") else []
+    return found + [repo.parent.parent / "gamefiles", repo.parent / "3DHeat-GameFiles", repo.parent / "3DHeat" / "exporters" / "gamefiles"]
+
+
+def ensure() -> bool:
+    try:
+        import heat3d_gamefiles
+
+        if getattr(heat3d_gamefiles, "__file__", None):
+            return True
+        del sys.modules["heat3d_gamefiles"]
+    except ImportError:
+        pass
+    for folder in candidates():
+        if (folder / "heat3d_gamefiles" / "__init__.py").is_file():
+            sys.path.insert(0, str(folder))
+            try:
+                import heat3d_gamefiles  # noqa: F401
+
+                return True
+            except ImportError:
+                sys.path.remove(str(folder))
+    return False

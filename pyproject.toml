@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "heat3d-ext-arma3"
+version = "0.1.0"
+description = "Arma 3 terrains from your own install into 3DHeat levels: terrain, sea, roads, placed objects as boxes, towns and airfields, and the vehicle and weapon catalogue"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "heat3d-gamefiles @ https://github.com/Holdi601/3DHeat-GameFiles/archive/refs/tags/v1.1.0.zip",
+    "numpy>=2.0",
+    "Pillow>=10.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+heat3d-arma3-maps = "heat3d_ext_arma3.cli:main"
+
+[tool.setuptools]
+packages = ["heat3d_ext_arma3"]

@@ -1,0 +1,112 @@
+# 3DHeat Arma 3: Arma 3 terrains as 3D levels
+
+**What is it?** This tool turns the terrains of your own Arma 3 install - the
+base game's and those of the DLCs you have - into 3D levels for the
+[3DHeat](https://github.com/Holdi601/3DHeat) viewer: the ground and the sea,
+the road network, every placed building and object as a box of its own size,
+the towns, military areas and airfields as a layout, and the game's vehicles,
+weapons and factions as a catalogue.
+
+**Why would I use it?** So recordings of Arma 3 missions (OCAP and others)
+have the ground, the roads and the buildings under them, in the game's own
+metres, and units are named and sorted the way the game names them.
+
+**Example:** `heat3d-arma3-maps` -> where the game is, which DLCs it has, and
+which terrains are not extracted yet; `heat3d-arma3-maps all` extracts them.
+
+Each game reader is its own small project with its own licence file, releases
+and issue tracker, so it can be installed, updated, maintained - or withdrawn
+on a rights holder's request - on its own, without affecting the viewer or the
+other tools. The levels it writes stay on your machine.
+
+## Quick start
+
+You need: Windows or Linux, [Python](https://www.python.org/downloads/) 3.10 or
+later, and Arma 3 installed through Steam (found by itself in every Steam
+library, also the Linux, Flatpak and Snap Steam folders a Proton install lives
+in). Arma 3 Tools are not needed.
+
+```bash
+python -m pip install -e .        # from a checkout: installs heat3d-arma3-maps
+heat3d-arma3-maps                 # finds the game and says what is missing
+heat3d-arma3-maps all             # every terrain not extracted yet, or changed since
+heat3d-arma3-maps catalog         # vehicles, weapons and factions
+```
+
+Levels go to `$HEAT3D_LEVELS/arma3/` when `HEAT3D_LEVELS` is set (the viewer's
+levels folder), else to `arma3/` where you run it; `--levels FOLDER` says
+where. A game outside the Steam libraries needs `--game "<Arma 3 folder>"`.
+
+## Commands
+
+| Command | Does |
+|---|---|
+| *(none)* or `find` | where the game is, its DLCs, every terrain and whether it is extracted; what to run next |
+| `status [--json]` | every terrain: `new`, `changed` (a game or DLC update changed its archives), `outdated` (written by an older level format), `missing` (files gone), `current`, `removed` |
+| `worlds` | the terrains with their world names (what the game and every recording call them), display names and DLC |
+| `world <world>` | one terrain as `<World>.glb`, `<World>.json` and `<World>.layouts.json` |
+| `all [--force]` | every terrain `status` does not call current |
+| `layouts <world>` | only the places, as `<World>.layouts.json` |
+| `catalog [-o FILE]` | vehicles, weapons and factions as `catalog.json` |
+| `identify <file>` | what an Arma 3 file is: archive, config, terrain or model |
+
+| `world` / `all` option | Does |
+|---|---|
+| `--max-grid N` | at most N height samples a side (default 4097: every sample of the largest terrains) |
+| `--trees` | also place vegetation (as boxes) |
+| `--no-structures`, `--no-roads` | leave out the placed objects, the road network |
+| `--mod FOLDER` | also read a mod folder (repeatable), for terrains a mod brings |
+
+Exit status: 0 done; 1 reading failed; 2 nothing to read (no install, no such
+world); the message says what to do.
+
+## What comes out
+
+| File | What it is |
+|---|---|
+| `<World>.glb` | `ground:<World>` (the height grid, coloured by beach, low ground, slopes, rock, high ground), `water:<World>` (the sea), `road:<World>` (the road network), `structure:<World>` (placed objects as boxes) |
+| `<World>.json` | the world's name, display name, DLC, size, sample spacing and frame |
+| `<World>.layouts.json` | towns, military areas, other named places and airfields ([layouts](https://holdi601.github.io/3DHeat/level-layouts.html)) |
+| `manifest.json` | every level written: id, game build, the fingerprints of the archives it came from, extractor and level-format version, files |
+| `catalog.json` | class name, display name, side, faction, kind, domain, model and the real vehicle each stands for |
+
+**Frame:** metres, x east, y up, z south, origin the terrain's south-west
+corner: Arma's own world metres with north turned to -z, so a recording's
+positions (x east, y north) land on the level as they are.
+
+**World names:** `<World>` is the `CfgWorlds` class of the terrain - `Altis`,
+`Stratis`, `Malden`, `Tanoa`, `Enoch` (Livonia), `VR` and the DLC terrains by
+their own names. That is the `worldName` an OCAP recording carries, so the
+viewer finds the level of a recording by its name.
+
+## What it reads
+
+The PBO archives of your own install (base game, DLC folders, and mod folders
+you name), read only: their configuration (`config.bin`), string tables, the
+binarised terrain (`.wrp`), the road network (`roads.shp`) and the size of
+each placed model. Encrypted archives (`.ebo`) and encrypted entries are left
+alone and listed; signatures are not touched. Nothing is written into the
+game's folder.
+
+Nothing of the game is in this repository or downloaded by it: no game assets,
+no game code, no game files. The levels it writes stay on your machine, to view,
+not to share.
+
+3DHeat Arma 3 is not affiliated with or endorsed by Bohemia Interactive. Arma 3
+and related names and trademarks belong to their owners. Rights holders: open
+an issue on this project's issue tracker - we respond quickly and remove
+anything on request.
+
+## Tests
+
+```bash
+python -m pip install -e .[test]
+python -m pytest
+```
+
+On made-up data written by the tests themselves (archives, configs, a terrain,
+models, a road network): no game files are needed or used.
+
+## Licence
+
+MIT ([`LICENSE`](LICENSE)).
