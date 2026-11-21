@@ -8,7 +8,10 @@ heat3d-arma3-maps layouts <world>      only the places (towns, military, airfiel
 heat3d-arma3-maps catalog [-o FILE]    vehicles, weapons and factions as catalog.json
 heat3d-arma3-maps identify <file>      what an Arma 3 file is (PBO, config, terrain, model)
 
-Common options: --game FOLDER (the Arma 3 folder, when it is not found by itself), --mod FOLDER (also read a mod
+heat3d-arma3-maps extract [ids] [--new] [--changed] [--outdated] [--progress-json]
+                                       what the 3DHeat extractors manager runs
+
+Common options: --install FOLDER (the Arma 3 folder, when it is not found by itself), --mod FOLDER (also read a mod
 folder; repeatable), --levels FOLDER (where levels go; default $HEAT3D_LEVELS/arma3, else ./arma3).
 
 Exit status: 0 done; 1 reading failed; 2 nothing to read (no install, no such world); the message says what to do.
@@ -39,12 +42,12 @@ def _open(args):
     from .game import Game
     from .install import find_install
 
-    install, looked = find_install(args.game)
+    install, looked = find_install(args.install)
     if install is None:
         print("Arma 3 not found. Looked at:", file=sys.stderr)
         for line in looked:
             print(f"  {line}", file=sys.stderr)
-        print("Install Arma 3 through Steam, or pass --game <Arma 3 folder>.", file=sys.stderr)
+        print("Install Arma 3 through Steam, or pass --install <Arma 3 folder>.", file=sys.stderr)
         return None
     return Game.open(install, [Path(m) for m in args.mod or []])
 
@@ -58,18 +61,25 @@ def _installed(game, with_config: bool = True) -> list[dict]:
 
 
 def cmd_status(args) -> int:
-    from .manifest import status
+    from .manifest import manager_status, status
 
+    folder = levels_folder(args)
+    if args.json:
+        from .install import find_install
+
+        if find_install(args.install)[0] is None:  # the extractors manager wants an answer, not an error
+            print(json.dumps(manager_status(GAME, "Arma 3", None, [], __version__, folder), indent=1))
+            return 0
     game = _open(args)
     if game is None:
         return 2
-    folder = levels_folder(args)
     rows = status(folder, _installed(game, with_config=not args.fast), LEVEL_FORMAT)
     skipped = [{"path": p, "why": w} for p, w in sorted(game.skipped.items())]
     if args.json:
-        print(json.dumps({"game": GAME, "install": str(game.install.root), "build": game.install.build,
-                          "extractor": f"{PROG} {__version__}", "levelFormat": LEVEL_FORMAT, "levels": str(folder),
-                          "worlds": rows, "skipped": skipped}, indent=1))
+        doc = manager_status(GAME, "Arma 3", game.install.build, rows, __version__, folder)
+        doc.update(install=str(game.install.root), extractor=f"{PROG} {__version__}", levelFormat=LEVEL_FORMAT,
+                   worlds=rows, skipped=skipped)
+        print(json.dumps(doc, indent=1))
         return 0
     print(f"Arma 3 at {game.install.root} (build {game.install.build}); levels in {folder}")
     for r in rows:
@@ -178,6 +188,36 @@ def cmd_all(args) -> int:
     if not todo:
         print("every terrain is extracted and current")
     return worst
+
+
+def cmd_extract(args) -> int:
+    """The extractors manager's verb: maps by state (--new, --changed, --outdated) or by id, one JSON line each."""
+    from .manifest import Progress, pick, status
+
+    progress = Progress(args.progress_json)
+    if args.game_key and args.game_key != GAME:
+        progress.fail(f"no game {args.game_key!r} here; this tool reads {GAME}")
+        return 2
+    game = _open(args)
+    if game is None:
+        progress.fail("Arma 3 not found")
+        return 2
+    folder = levels_folder(args)
+    rows = status(folder, _installed(game), LEVEL_FORMAT)
+    try:
+        chosen = pick(rows, args.maps, new=args.new, changed=args.changed, outdated=args.outdated)
+    except LookupError as exc:
+        progress.fail(str(exc))
+        return 2
+    worlds = {w.id: w for w in game.worlds()}
+    progress.start(len(chosen))
+    for i, map_id in enumerate(chosen):
+        try:
+            code = _export_one(game, worlds[map_id], args, folder)
+            progress.map(i, map_id, code == 0, "" if code == 0 else "not exported (see the message above)")
+        except Exception as exc:  # noqa: BLE001 - one map failing never stops the others
+            progress.map(i, map_id, False, str(exc))
+    return progress.done()
 
 
 def cmd_layouts(args) -> int:
@@ -291,7 +331,7 @@ def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog=PROG, description="Arma 3 terrains, their places and the catalogue from your own install into 3DHeat levels.")
     ap.add_argument("--version", action="version", version=__version__)
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--game", help="the Arma 3 folder, when it is not found by itself")
+    common.add_argument("--install", help="the Arma 3 folder, when it is not found by itself")
     common.add_argument("--mod", action="append", help="also read this mod folder (repeatable)")
     common.add_argument("--levels", help="where levels go (default $HEAT3D_LEVELS/arma3, else ./arma3)")
     sub = ap.add_subparsers(dest="verb")
@@ -314,6 +354,14 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("all", parents=[common, export_opts], help="every terrain not extracted or not current")
     p.add_argument("--force", action="store_true", help="every terrain, current or not")
     p.set_defaults(run=cmd_all)
+    p = sub.add_parser("extract", parents=[common, export_opts], help="maps by state or id, for the extractors manager")
+    p.add_argument("maps", nargs="*", help="map ids, as status lists them")
+    p.add_argument("--game", dest="game_key", default=None, help="only this game (the extractors manager names it)")
+    p.add_argument("--new", action="store_true")
+    p.add_argument("--changed", action="store_true")
+    p.add_argument("--outdated", action="store_true")
+    p.add_argument("--progress-json", action="store_true", help="one JSON line per event (start, map, done)")
+    p.set_defaults(run=cmd_extract)
     p = sub.add_parser("layouts", parents=[common], help="only a world's places as <World>.layouts.json")
     p.add_argument("world")
     p.set_defaults(run=cmd_layouts)

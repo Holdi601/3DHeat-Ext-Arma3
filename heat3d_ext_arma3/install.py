@@ -1,7 +1,7 @@
 """
 Finding Arma 3 (and Arma 3 Tools) on this machine, read only.
 
-Looked for, in order: `--game` / `ARMA3_PATH`; the Steam libraries (every `libraryfolders.vdf` of every Steam root:
+Looked for, in order: `--install` / `ARMA3_PATH`; the Steam libraries (every `libraryfolders.vdf` of every Steam root:
 the registry's, the usual Windows folders, and on Linux the native, Flatpak and Snap Steam folders that Proton games
 live in); the game's own registry entry. A folder only counts when it holds the game's data (`Addons` with PBOs).
 """
@@ -161,7 +161,7 @@ def _program_date(root: Path) -> str:
 def find_install(given: str | Path | None = None) -> tuple[Install | None, list[str]]:
     """The install, and what was looked at (for the message when there is none)."""
     looked: list[str] = []
-    for label, path in (("--game", given), ("ARMA3_PATH", os.environ.get("ARMA3_PATH"))):
+    for label, path in (("--install", given), ("ARMA3_PATH", os.environ.get("ARMA3_PATH"))):
         if path:
             p = Path(path)
             looked.append(f"{label} {p}")

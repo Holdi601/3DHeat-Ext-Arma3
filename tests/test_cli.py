@@ -66,8 +66,8 @@ def _run(capsys, *argv):
 
 def test_no_install(tmp_path, capsys, monkeypatch):
     monkeypatch.delenv("ARMA3_PATH", raising=False)
-    code, _out, err = _run(capsys, "find", "--game", str(tmp_path / "nothing"), "--levels", str(tmp_path / "lv"))
-    assert "--game" in err
+    code, _out, err = _run(capsys, "find", "--install", str(tmp_path / "nothing"), "--levels", str(tmp_path / "lv"))
+    assert "--install" in err
     if code == 0:
         pytest.skip("a real Arma 3 install was found")
     assert code == 2
@@ -76,12 +76,16 @@ def test_no_install(tmp_path, capsys, monkeypatch):
 def test_end_to_end(tmp_path, capsys):
     game, levels = tmp_path / "Arma 3", tmp_path / "levels"
     _install(game)
-    common = ["--game", str(game), "--levels", str(levels)]
+    common = ["--install", str(game), "--levels", str(levels)]
     code, out, _ = _run(capsys, "find", *common)
     assert code == 0 and "new" in out and "Test" in out and "Apex" in out
     code, out, _ = _run(capsys, "status", "--json", *common)
     doc = json.loads(out)
     assert [(w["id"], w["state"]) for w in doc["worlds"]] == [("Test", "new")]
+    # the shape the extractors manager reads
+    g = doc["games"][0]
+    assert g["game"] == "arma3" and g["found"] is True and g["counts"]["new"] == 1
+    assert g["maps"] == [{"id": "Test", "title": "Test Island", "state": "new"}]
     assert any(s["path"].endswith("locked.ebo") for s in doc["skipped"])
     code, out, _ = _run(capsys, "worlds", *common)
     assert "Test Island" in out
@@ -115,6 +119,34 @@ def test_end_to_end(tmp_path, capsys):
     assert entry["extractor"].startswith("heat3d-arma3-maps") and entry["sources"][0]["hash"]
 
 
+def test_extract_progress_json(tmp_path, capsys, monkeypatch):
+    if not ensure():
+        pytest.skip("3DHeat GameFiles not available")
+    game, levels = tmp_path / "Arma 3", tmp_path / "lv"
+    _install(game)
+    monkeypatch.setenv("HEAT3D_LEVELS", str(levels))  # as the manager starts it
+    code, out, _ = _run(capsys, "extract", "--game", "arma3", "--new", "--progress-json", "--install", str(game))
+    events = [json.loads(line) for line in out.splitlines() if line.startswith("{")]
+    assert code == 0
+    assert events[0] == {"event": "start", "total": 1}
+    assert events[1]["event"] == "map" and events[1]["id"] == "Test" and events[1]["state"] == "ok"
+    assert events[-1] == {"event": "done", "ok": 1, "failed": 0}
+    assert (levels / "arma3" / "Test.glb").is_file()
+    code, out, _ = _run(capsys, "status", "--json", "--install", str(game))
+    m = json.loads(out)["games"][0]["maps"][0]
+    assert m["state"] == "current" and m["extracted_version"]
+    code, out, _ = _run(capsys, "extract", "nowhere", "--progress-json", "--install", str(game))
+    assert code == 2 and '"error"' in out
+
+
+def test_status_json_without_install(tmp_path, capsys):
+    code, out, _ = _run(capsys, "status", "--json", "--install", str(tmp_path / "none"), "--levels", str(tmp_path))
+    doc = json.loads(out)
+    if doc["games"][0]["found"]:
+        pytest.skip("a real Arma 3 install was found")
+    assert code == 0 and doc["games"][0]["maps"] == []
+
+
 def test_level_geometry(tmp_path, capsys):
     if not ensure():
         pytest.skip("3DHeat GameFiles not available")
@@ -134,7 +166,7 @@ def test_level_geometry(tmp_path, capsys):
 def test_catalog(tmp_path, capsys):
     game, levels = tmp_path / "Arma 3", tmp_path / "levels"
     _install(game)
-    code, out, _ = _run(capsys, "catalog", "--game", str(game), "--levels", str(levels))
+    code, out, _ = _run(capsys, "catalog", "--install", str(game), "--levels", str(levels))
     assert code == 0
     items = json.loads((levels / "catalog.json").read_text())["items"]
     by_id = {i["id"]: i for i in items}

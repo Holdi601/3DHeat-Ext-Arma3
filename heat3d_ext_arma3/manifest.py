@@ -57,6 +57,72 @@ def record(folder: Path, game: str, tool: str, version: str, level_format: int, 
     return entry
 
 
+#: Our states as the extractors manager names them: a level whose world is gone is its `missing`; a level whose
+#: files are gone is extracted again, as a new one is.
+MANAGER_STATE = {"new": "new", "changed": "changed", "outdated": "outdated", "current": "current",
+                 "removed": "missing", "missing": "new"}
+
+
+def manager_status(game: str, label: str, build: str | None, rows: list[dict], version: str, levels: Path) -> dict:
+    """`status --json` in the shape the 3DHeat extractors manager reads (`maps.rs`): one game, its maps, counts."""
+    maps = []
+    counts = dict.fromkeys(("new", "changed", "outdated", "current", "missing"), 0)
+    for r in rows:
+        state = MANAGER_STATE.get(r["state"], "new")
+        counts[state] += 1
+        line = {"id": r["id"], "title": r.get("name") or r["id"], "state": state}
+        if r.get("extractor"):
+            line["extracted_version"] = r["extractor"].rsplit(" ", 1)[-1]
+        maps.append(line)
+    return {"format": "3dheat-extractor-status", "version": version, "levels": str(levels),
+            "games": [{"game": game, "label": label, "found": build is not None, "build": build,
+                       "maps": maps, "counts": counts}]}
+
+
+def pick(rows: list[dict], ids: list[str], *, new: bool, changed: bool, outdated: bool) -> list[str]:
+    """The map ids an `extract` asks for: named ones, and those in the chosen states (status order)."""
+    known = {r["id"].lower(): r["id"] for r in rows if r["state"] != "removed"}
+    chosen: list[str] = []
+    for i in ids:
+        if i.lower() not in known:
+            raise LookupError(f"no map {i!r}; status lists: " + ", ".join(known.values()))
+        chosen.append(known[i.lower()])
+    states = {s for s, on in (("new", new), ("missing", new), ("changed", changed), ("outdated", outdated)) if on}
+    for r in rows:
+        if r["state"] in states and r["id"] not in chosen:
+            chosen.append(r["id"])
+    return chosen
+
+
+class Progress:
+    """`--progress-json`: one JSON line per event - start (total), map (index, id, ok or failed, detail), done."""
+
+    def __init__(self, on: bool) -> None:
+        self.on, self.ok, self.failed = on, 0, 0
+
+    def _emit(self, **event) -> None:
+        if self.on:
+            print(json.dumps(event, ensure_ascii=False), flush=True)
+
+    def start(self, total: int) -> None:
+        self._emit(event="start", total=total)
+
+    def map(self, index: int, map_id: str, ok: bool, detail: str = "") -> None:
+        if ok:
+            self.ok += 1
+        else:
+            self.failed += 1
+        self._emit(event="map", index=index, id=map_id, state="ok" if ok else "failed", detail=detail)
+
+    def fail(self, why: str) -> None:
+        self._emit(event="start", total=0)
+        self._emit(event="done", ok=0, failed=0, error=why)
+
+    def done(self) -> int:
+        self._emit(event="done", ok=self.ok, failed=self.failed)
+        return 1 if self.failed else 0
+
+
 def status(folder: Path, installed: list[dict], level_format: int) -> list[dict]:
     """One row per installed world (`id`, `sources`) and per recorded level no longer installed."""
     doc = load(folder)
@@ -81,6 +147,7 @@ def status(folder: Path, installed: list[dict], level_format: int) -> list[dict]
             else:
                 row.update(state="current", why=f"{entry.get('extractor', '')}, {entry.get('exported', '')}")
             row["exported"] = entry.get("exported", "")
+            row["extractor"] = entry.get("extractor", "")
         rows.append(row)
     have = {w["id"] for w in installed}
     for level, entry in levels.items():

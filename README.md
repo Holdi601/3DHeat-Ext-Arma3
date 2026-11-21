@@ -35,7 +35,7 @@ heat3d-arma3-maps catalog         # vehicles, weapons and factions
 
 Levels go to `$HEAT3D_LEVELS/arma3/` when `HEAT3D_LEVELS` is set (the viewer's
 levels folder), else to `arma3/` where you run it; `--levels FOLDER` says
-where. A game outside the Steam libraries needs `--game "<Arma 3 folder>"`.
+where. A game outside the Steam libraries needs `--install "<Arma 3 folder>"`.
 
 ## Commands
 
