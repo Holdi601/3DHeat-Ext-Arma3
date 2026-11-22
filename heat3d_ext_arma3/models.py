@@ -43,7 +43,7 @@ import numpy as np
 from .odol import HIDE, ROTATION, ROTATION_X, ROTATION_Y, ROTATION_Z, Model, OdolError, read_model
 
 GAME = "arma3"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 VEHICLE_SIMS = {"tankx", "carx", "helicopterrtd", "helicopterx", "airplanex", "shipx", "submarinex", "motorcycle"}
 STATIC_KINDS = {"static", "static-mg", "static-at", "static-aa", "mortar", "artillery"}
@@ -54,9 +54,10 @@ TYPE_WORDS = {
     "ifv": ("ground", "ifv"), "apc": ("ground", "apc"), "arv": ("ground", "armoured recovery vehicle"),
     "spaa": ("ground", "spaa"), "spg": ("ground", "self-propelled artillery"), "mlrs": ("ground", "mlrs rocket"),
     "car": ("ground", "car"), "truck": ("ground", "truck"), "ugv": ("ground", "unmanned ground vehicle"),
-    "static": ("ground", "static"), "static-mg": ("ground", "static mg"), "static-at": ("ground", "static at"),
-    "static-aa": ("ground", "static anti-air"), "mortar": ("ground", "static mortar"),
-    "artillery": ("ground", "static artillery"),
+    # (a static weapon is a unit: never the bare word "static", which marks props that stand for no unit)
+    "static": ("ground", "emplacement"), "static-mg": ("ground", "emplacement mg"),
+    "static-at": ("ground", "emplacement at"), "static-aa": ("ground", "emplacement anti-air"),
+    "mortar": ("ground", "emplacement mortar"), "artillery": ("ground", "emplacement artillery"),
     "heli-transport": ("heli", "helicopter transport"), "heli-attack": ("heli", "helicopter attack"),
     "plane": ("air", "plane transport"), "fighter": ("air", "fighter"), "attack": ("air", "attack"),
     "uav": ("air", "uav"), "tiltrotor": ("air", "tiltrotor transport"),
@@ -868,7 +869,8 @@ def export_pack(game, out: Path, source: str, wanted: list[str] | None = None, f
                 domain, words = TYPE_WORDS.get(u.kind, (u.domain or "ground", u.kind))
                 if "quadcopter" in u.key.lower():
                     words = "uav quadcopter"
-                meta = {"unit": u.id, "kind": u.kind, "domain": domain, "type": words, "model": u.shape,
+                meta = {"unit": u.id, "kind": "static-weapon" if u.kind == "static" else u.kind, "domain": domain,
+                        "type": words, "model": u.shape,
                         "anchor": "centre" if domain in ("air", "heli") else "ground",
                         "box": [round(float(x), 4) for x in (*lo, *hi)],
                         "pivots": {p: j["pivot"] for p, j in b.joints.items() if "pivot" in j and p.split(".")[0] in ("turret", "gun")},
