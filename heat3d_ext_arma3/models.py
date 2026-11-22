@@ -498,10 +498,14 @@ def build(model: Model, unit: Unit, colours: Colours, hide_tex: dict[str, str]) 
         tri = np.array(tri_list, np.int64).reshape(-1, 3)
         tface = np.array(tri_face, np.int64)
         keep = ~hide_v[tri].any(axis=1)
-        # a proxy's marker triangle can sit inside a textured section: dropped by its own faces too
+        # a proxy's marker triangle can sit inside a textured section: dropped by its own faces too, and a marker left
+        # at the model's origin with no selection (the Orca's tail rotor): (0, 0, 0), (0, 2, 0) and a unit step
         for sname, sel in L.selections.items():
             if sname.startswith("proxy:") and len(sel.faces) and len(tface):
                 keep &= ~np.isin(tface, sel.faces[sel.faces < len(L.faces)])
+        if len(tri):
+            g = np.sort(np.abs(L.vertices + model.centre)[tri].sum(axis=2), axis=1)
+            keep &= ~(np.abs(g - [0.0, 1.0, 2.0]).max(axis=1) < 1e-3)
         sec_of_tri = fsec[tface] if len(tface) else np.zeros(0, np.int64)
         keep &= ~((sec_of_tri >= 0) & drop_sec[np.maximum(sec_of_tri, 0)])
         # colour per section
