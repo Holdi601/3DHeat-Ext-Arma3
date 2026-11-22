@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+- What's new: big terrains load in seconds. Each terrain is also written tiled (`<World>.terrain.json` +
+  `<World>.terrain.bin`): the heights as a pyramid of levels in tiles, what the ground is per sample (roads
+  included), and every placed object as a small record per square kilometre. 3DHeat draws Altis from it near the
+  camera in full detail and coarser further off, loading the tiles as you look round, instead of reading a 1 GB
+  level whole. The glb beside it is at most 2049 samples a side now (`--max-grid` as before, `--no-terrain` for the
+  old single level); the level format is 2, so `status` calls levels written before outdated.
+- Vehicle models: display names without stray spaces, and every vehicle found by the name the game shows; a
+  proxy's marker triangle inside a textured section (the Orca's tail rotor) is left out.
+
 ## 0.5.0
 
 - What's new: your Arma 3 vehicles in their own shape in 3DHeat. `heat3d-arma3-maps models` (or "Vehicle models" in

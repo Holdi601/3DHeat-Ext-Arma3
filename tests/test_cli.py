@@ -185,6 +185,19 @@ def test_level_geometry(tmp_path, capsys):
     assert report.water > 0 and report.roads == 1 and report.structures == 15
     assert report.skipped == {"vegetation (without --trees)": 15}
     assert np.allclose(terrain.heights, h)
+    # the tiled terrain beside the glb: north edge first, the placed objects as records, the road painted in
+    from heat3d_ext_arma3 import terrain as T
+
+    doc = json.loads((tmp_path / "out" / "Test.terrain.json").read_text())
+    data = (tmp_path / "out" / "Test.terrain.bin").read_bytes()
+    assert any(f.name == "Test.terrain.bin" for f in files) and report.terrain["objects"] == 15
+    assert doc["instances"]["count"] == 15 and doc["water"] == {"y": 0.0}
+    tile, cls = T.read_tile(doc, data, 0, 0, 0)
+    rows = h.shape[0]
+    assert abs(tile[2, 2] - h[rows - 1, 0]) < 0.05 and abs(tile[2 + rows - 1, 2 + 5] - h[0, 5]) < 0.05
+    assert (cls == doc["classes"]["names"].index("road")).any()
+    box = doc["instances"]["models"][0]["box"]
+    assert box == [-4.0, 0.0, -5.0, 4.0, 6.0, 5.0]
 
 
 def test_catalog(tmp_path, capsys):

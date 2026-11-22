@@ -498,6 +498,10 @@ def build(model: Model, unit: Unit, colours: Colours, hide_tex: dict[str, str]) 
         tri = np.array(tri_list, np.int64).reshape(-1, 3)
         tface = np.array(tri_face, np.int64)
         keep = ~hide_v[tri].any(axis=1)
+        # a proxy's marker triangle can sit inside a textured section: dropped by its own faces too
+        for sname, sel in L.selections.items():
+            if sname.startswith("proxy:") and len(sel.faces) and len(tface):
+                keep &= ~np.isin(tface, sel.faces[sel.faces < len(L.faces)])
         sec_of_tri = fsec[tface] if len(tface) else np.zeros(0, np.int64)
         keep &= ~((sec_of_tri >= 0) & drop_sec[np.maximum(sec_of_tri, 0)])
         # colour per section
@@ -898,10 +902,11 @@ def export_pack(game, out: Path, source: str, wanted: list[str] | None = None, f
                 report["bytes"] += size
                 files[key] = fname
             entry = {k: v for k, v in meta.items() if k != "unit"}
-            real = recorded_names(u.name, entry.get("domain", ""))
-            extra = [x for x in [u.name, *real] if x and x != u.key]
+            shown = (u.name or "").strip()
+            real = recorded_names(shown, entry.get("domain", ""))
+            extra = [x.strip() for x in [shown, *real] if x and x.strip() and x.strip() != u.key]
             entry.update({"file": fname, "key": key, "gameBuild": game.install.build, "source": source,
-                          "name": u.key, "displayName": u.name, "side": u.side})
+                          "name": u.key, "displayName": shown, "side": u.side})
             if extra:
                 entry["names"] = list(dict.fromkeys(extra))
             entry["hits"] = {h.name: {"selection": str(h.get("name", "")), "component": str(h.get("armorComponent", "") or ""),
@@ -928,7 +933,9 @@ def export_pack(game, out: Path, source: str, wanted: list[str] | None = None, f
         by_file.setdefault(e["file"], []).append(uid)
     for uid, e in index["units"].items():
         al = set(by_file[e["file"]]) - {uid}
-        al |= {x.lower() for x in e.get("names", [])}
+        al |= {x.strip().lower() for x in e.get("names", [])}
+        if e.get("displayName", "").strip():  # a recording names the vehicle as the game shows it
+            al.add(e["displayName"].strip().lower())
         e["aliases"] = sorted(al)
     tmp = index_path.with_suffix(".json.part")
     tmp.write_text(json.dumps(index, indent=1, ensure_ascii=False), encoding="utf-8")

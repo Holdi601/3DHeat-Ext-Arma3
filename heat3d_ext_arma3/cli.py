@@ -138,7 +138,8 @@ def _export_one(game, world, args, folder: Path) -> int:
 
     try:
         report, files, wrp = export(game, world, folder, max_grid=args.max_grid, trees=args.trees,
-                                    structures=not args.no_structures, roads=not args.no_roads)
+                                    structures=not args.no_structures, roads=not args.no_roads,
+                                    terrain=not args.no_terrain)
     except (WrpError, KeyError, ValueError) as exc:
         print(f"{world.id}: not exported: {exc}", file=sys.stderr)
         return 1
@@ -154,6 +155,10 @@ def _export_one(game, world, args, folder: Path) -> int:
     print(f"  water      {report.water:>10,} triangles")
     print(f"  roads      {report.roads:>10,} segments")
     print(f"  structure  {report.structures:>10,} boxes of {report.objects:,} placed objects")
+    if report.terrain:
+        t = report.terrain
+        print(f"  tiled      {t['tiles']:>10,} tiles in {t['levels']} levels, {t['bytes'] / 1e6:,.1f} MB, "
+              f"{t['objects']:,} objects")
     print(f"  places     {doc['counts']}")
     if report.skipped:
         print("  left out   " + ", ".join(f"{k}: {v:,}" for k, v in sorted(report.skipped.items())))
@@ -395,7 +400,10 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("worlds", parents=[common], help="the terrains and their world names")
     p.set_defaults(run=cmd_worlds)
     export_opts = argparse.ArgumentParser(add_help=False)
-    export_opts.add_argument("--max-grid", type=int, default=4097, help="most height samples per side (default 4097)")
+    export_opts.add_argument("--max-grid", type=int, default=None,
+                             help="the glb's most height samples per side (default 2049 with the tiled terrain, else 4097)")
+    export_opts.add_argument("--no-terrain", action="store_true",
+                             help="leave out the tiled terrain (<World>.terrain.json/.bin) the viewer streams")
     export_opts.add_argument("--trees", action="store_true", help="also place vegetation (as boxes)")
     export_opts.add_argument("--no-structures", action="store_true", help="leave out the placed objects")
     export_opts.add_argument("--no-roads", action="store_true", help="leave out the road network")

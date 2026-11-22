@@ -1,5 +1,7 @@
 """
-One Arma 3 terrain as a 3DHeat level: `<World>.glb` and `<World>.json` beside it.
+One Arma 3 terrain as a 3DHeat level: `<World>.glb` and `<World>.json` beside it, and the same terrain tiled for
+streaming (`terrain.py`: `<World>.terrain.json` + `<World>.terrain.bin`), which the viewer draws instead of the glb;
+with the tiled terrain beside it the glb is at most 2049 samples a side (for older viewers and other tools).
 
 Parts (node names, as the viewer reads them): `ground:<World>` (the height grid, coloured by what it is: beach, low
 ground, slopes, rock, high ground), `water:<World>` (the sea at zero), `road:<World>` (the road network as flat
@@ -51,6 +53,7 @@ class Report:
     structures: int = 0
     objects: int = 0
     skipped: dict[str, int] = field(default_factory=dict)
+    terrain: dict | None = None
     notes: list[str] = field(default_factory=list)
 
     def skip(self, why: str, n: int = 1) -> None:
@@ -113,21 +116,22 @@ def _sea(heights: np.ndarray, spacing: float, per: int = 8) -> tuple[np.ndarray,
     return grid.reshape(-1, 3)[used], remap[faces]
 
 
-def road_ribbons(game: Game, world: World, heights: np.ndarray, spacing: float, size: float, report: Report):
+def road_segments(game: Game, world: World, size: float, report: Report) -> np.ndarray:
+    """The road network as (n, 5) segments: east, north of each end, then the width, in metres."""
     path = roads_path(world)
     if not path or path not in game.fs:
         report.notes.append("no road network (data\\roads\\roads.shp) beside the terrain")
-        return np.zeros((0, 3), np.float32), np.zeros((0, 3), np.int64)
+        return np.zeros((0, 5), np.float64)
     try:
         lines = read_polylines(game.fs.read(path))
         dbf = path[:-4] + ".dbf"
         rows = read_dbf(game.fs.read(dbf)) if dbf in game.fs else []
     except (ValueError, PboError, Encrypted) as exc:
         report.notes.append(f"road network not readable: {exc}")
-        return np.zeros((0, 3), np.float32), np.zeros((0, 3), np.int64)
+        return np.zeros((0, 5), np.float64)
     xs = [p[0] for rec in lines for part in rec for p in part]
     shift = 200000.0 if xs and min(xs) >= 200000.0 and max(xs) - 200000.0 <= size + 1 else 0.0
-    quads = []
+    segs = []
     for i, rec in enumerate(lines):
         row = rows[i] if i < len(rows) else {}
         try:
@@ -143,19 +147,25 @@ def road_ribbons(game: Game, world: World, heights: np.ndarray, spacing: float, 
             p = np.array(part, dtype=np.float64)
             p[:, 0] -= shift
             d = np.diff(p, axis=0)
-            length = np.hypot(d[:, 0], d[:, 1])
-            keep = length > 1e-3
+            keep = np.hypot(d[:, 0], d[:, 1]) > 1e-3
             if not keep.any():
                 continue
-            a, d, length = p[:-1][keep], d[keep], length[keep]
-            side = np.stack([-d[:, 1], d[:, 0]], 1) / length[:, None] * (width / 2)
-            b = a + d
-            corners = np.stack([a - side, a + side, b - side, b + side], 1)  # (n, 4, 2): east, north
-            quads.append(corners)
-            report.roads += len(a)
-    if not quads:
+            a, b = p[:-1][keep], p[1:][keep]
+            segs.append(np.column_stack([a, b, np.full(len(a), width)]))
+    report.roads = sum(len(x) for x in segs)
+    return np.concatenate(segs) if segs else np.zeros((0, 5), np.float64)
+
+
+def road_ribbons(segments: np.ndarray, heights: np.ndarray, spacing: float):
+    """The road segments as flat ribbons just above the ground."""
+    if not len(segments):
         return np.zeros((0, 3), np.float32), np.zeros((0, 3), np.int64)
-    c = np.concatenate(quads).reshape(-1, 2)
+    a, b, width = segments[:, 0:2], segments[:, 2:4], segments[:, 4]
+    d = b - a
+    length = np.hypot(d[:, 0], d[:, 1])
+    side = np.stack([-d[:, 1], d[:, 0]], 1) / length[:, None] * (width[:, None] / 2)
+    corners = np.stack([a - side, a + side, b - side, b + side], 1)  # (n, 4, 2): east, north
+    c = corners.reshape(-1, 2)
     up = height_at(heights, spacing, c[:, 0], c[:, 1]) + 0.15
     pos = _to_level(c[:, 0], up, c[:, 1])
     base = np.arange(len(c) // 4)[:, None] * 4
@@ -164,11 +174,11 @@ def road_ribbons(game: Game, world: World, heights: np.ndarray, spacing: float, 
     return pos, faces
 
 
-def structure_boxes(game: Game, world: World, wrp: Wrp, trees: bool, report: Report):
-    models = wrp.models
+def model_boxes(game: Game, wrp: Wrp, trees: bool, report: Report):
+    """Each placed object's model box: (keep mask over wrp.objects, model number -> (lo, hi) or None)."""
     boxes: dict[int, tuple[np.ndarray, np.ndarray] | None] = {}
     folder_of = {}
-    for i, path in enumerate(models):
+    for i, path in enumerate(wrp.models):
         low = "\\" + path.lower().lstrip("\\")
         if not trees and any(v in low for v in VEGETATION):
             boxes[i] = None
@@ -193,7 +203,13 @@ def structure_boxes(game: Game, world: World, wrp: Wrp, trees: bool, report: Rep
     keep = np.array([boxes.get(int(m)) is not None for m in objs["model"]], dtype=bool)
     for m in objs["model"][~keep]:
         report.skip(folder_of.get(int(m), "model not readable"))
-    objs = objs[keep]
+    report.structures = int(keep.sum())
+    return keep, boxes
+
+
+def structure_boxes(wrp: Wrp, keep: np.ndarray, boxes: dict):
+    """Every kept placed object as a box of its model's size, where the terrain places it."""
+    objs = wrp.objects[keep]
     if not len(objs):
         return np.zeros((0, 3), np.float32), np.zeros((0, 3), np.int64)
     lo = np.stack([boxes[int(m)][0] for m in objs["model"]])
@@ -204,12 +220,36 @@ def structure_boxes(game: Game, world: World, wrp: Wrp, trees: bool, report: Rep
     world_pts = np.einsum("nkc,ncd->nkd", local, m[:, :3, :]) + m[:, None, 3, :]
     pos = _to_level(world_pts[..., 0], world_pts[..., 1], world_pts[..., 2]).reshape(-1, 3)
     faces = (_BOX[None] + 8 * np.arange(len(objs))[:, None, None]).reshape(-1, 3)
-    report.structures = len(objs)
     return pos, faces
 
 
-def export(game: Game, world: World, out_dir: Path, *, max_grid: int = 4097, trees: bool = False,
-           structures: bool = True, roads: bool = True, log=print) -> tuple[Report, list[Path], Wrp]:
+def object_instances(wrp: Wrp, keep: np.ndarray, boxes: dict, cell: float):
+    """The kept placed objects as the tiled terrain's instance records, with their model table."""
+    from .terrain import instance_records
+
+    objs = wrp.objects[keep]
+    used = sorted({int(m) for m in objs["model"]})
+    number = {m: i for i, m in enumerate(used)}
+    models = []
+    for m in used:
+        lo, hi = boxes[m]
+        # the model frame turned to the level's handedness: z back (Arma's model z is forward)
+        models.append({"path": wrp.models[m], "box": [round(float(v), 3) for v in (lo[0], lo[1], -hi[2], hi[0], hi[1], -lo[2])]})
+    m = objs["m"].reshape(-1, 4, 3).astype(np.float64)
+    flip = np.array([1.0, 1.0, -1.0])
+    aside, up, fwd = m[:, 0] * flip, m[:, 1] * flip, m[:, 2] * flip
+    axes = np.stack([aside, up, -fwd], 1)  # the model's x, y and z (back) in the level's frame
+    pos = m[:, 3] * flip
+    return instance_records(pos, axes, np.array([number[int(k)] for k in objs["model"]], dtype=np.uint16)), models
+
+
+#: The glb's most height samples a side when the tiled terrain is written beside it (the viewer streams that one).
+GLB_GRID_WITH_TERRAIN = 2049
+
+
+def export(game: Game, world: World, out_dir: Path, *, max_grid: int | None = None, trees: bool = False,
+           structures: bool = True, roads: bool = True, terrain: bool = True,
+           log=print) -> tuple[Report, list[Path], Wrp]:
     from heat3d_gamefiles.glb import Part, write_glb
 
     started = time.time()
@@ -218,6 +258,8 @@ def export(game: Game, world: World, out_dir: Path, *, max_grid: int = 4097, tre
     wrp = read_wrp(game.fs.read(world.wrp))
     report.notes += wrp.notes
     report.size, spacing = wrp.size, wrp.spacing
+    if max_grid is None:
+        max_grid = GLB_GRID_WITH_TERRAIN if terrain else 4097
     step = max(1, -(-(wrp.map_size[0]) // (max_grid - 1)))
     heights = wrp.heights
     h = heights[::step, ::step]
@@ -250,12 +292,33 @@ def export(game: Game, world: World, out_dir: Path, *, max_grid: int = 4097, tre
 
     sea_pos, sea_faces = _sea(heights, spacing, per=8 * step)
     report.water = add("water", sea_pos, sea_faces, (0.22, 0.40, 0.55))
-    if roads:
-        add("road", *road_ribbons(game, world, heights, spacing, wrp.size, report), (0.30, 0.30, 0.30))
+    segments = road_segments(game, world, wrp.size, report) if roads else np.zeros((0, 5))
+    if len(segments):
+        add("road", *road_ribbons(segments, heights, spacing), (0.30, 0.30, 0.30))
+    keep, boxes = np.zeros(0, bool), {}
     if structures:
         log(f"{world.id}: sizing {len(wrp.models):,} models for {len(wrp.objects):,} placed objects")
-        add("structure", *structure_boxes(game, world, wrp, trees, report), (0.75, 0.74, 0.70))
+        keep, boxes = model_boxes(game, wrp, trees, report)
+        add("structure", *structure_boxes(wrp, keep, boxes), (0.75, 0.74, 0.70))
     out_dir.mkdir(parents=True, exist_ok=True)
+    files: list[Path] = []
+    if terrain:
+        from .terrain import TILE, write_terrain
+
+        log(f"{world.id}: writing the tiled terrain")
+        rows_full = heights.shape[0]
+        cell = TILE * spacing
+        while cell < 800:
+            cell *= 2
+        objects = object_instances(wrp, keep, boxes, cell) + (cell,) if structures and keep.any() else None
+        flip = np.array([1.0, -1.0, 1.0, -1.0, 1.0])  # east, north -> x, z (south)
+        done = write_terrain(
+            out_dir / world.id, heights[::-1], spacing, origin=(0.0, -(rows_full - 1) * spacing),
+            info={"game": "arma3", "level": world.id, "name": world.name or world.id,
+                  "source": f"heat3d-arma3-maps {__version__}"},
+            sea=bool((heights < 0).any()), roads=segments * flip, objects=objects, log=log)
+        report.terrain = done
+        files += done["files"]
     glb = out_dir / f"{world.id}.glb"
     write_glb(glb, np.concatenate(positions), parts=parts, uvs=np.concatenate(uvs),
               extras={"game": "arma3", "world": world.id, "frame": "x east, y up, z south (metres)"})
@@ -267,4 +330,4 @@ def export(game: Game, world: World, out_dir: Path, *, max_grid: int = 4097, tre
         "source": f"heat3d-arma3-maps {__version__}",
     }, indent=1), encoding="utf-8")
     log(f"{world.id}: written in {time.time() - started:.0f} s")
-    return report, [glb, info], wrp
+    return report, [glb, info, *files], wrp

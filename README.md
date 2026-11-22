@@ -56,7 +56,7 @@ are for scripts; the 3DHeat app's Extractors panel installs, updates and runs it
 | *(none)* or `find` | where the game is, its DLCs, every terrain and whether it is extracted; what to run next |
 | `status [--json]` | every terrain: `new`, `changed` (a game or DLC update changed its archives), `outdated` (written by an older level format), `missing` (files gone), `current`, `removed` |
 | `worlds` | the terrains with their world names (what the game and every recording call them), display names and DLC |
-| `world <world>` | one terrain as `<World>.glb`, `<World>.json` and `<World>.layouts.json` |
+| `world <world>` | one terrain as `<World>.terrain.json` + `.terrain.bin` (tiled, streamed), `<World>.glb`, `<World>.json` and `<World>.layouts.json` |
 | `all [--force]` | every terrain `status` does not call current |
 | `layouts <world>` | only the places, as `<World>.layouts.json` |
 | `catalog [-o FILE]` | vehicles, weapons, factions, ammunition, magazines, vests, headgear, uniforms and soldiers as `catalog.json` |
@@ -67,7 +67,8 @@ are for scripts; the 3DHeat app's Extractors panel installs, updates and runs it
 
 | `world` / `all` option | Does |
 |---|---|
-| `--max-grid N` | at most N height samples a side (default 4097: every sample of the largest terrains) |
+| `--max-grid N` | the glb's most height samples a side (default 2049 beside the tiled terrain, 4097 without it) |
+| `--no-terrain` | leave out the tiled terrain (then the glb is the level, at up to 4097 samples a side) |
 | `--trees` | also place vegetation (as boxes) |
 | `--no-structures`, `--no-roads` | leave out the placed objects, the road network |
 | `--mod FOLDER` | also read a mod folder (repeatable), for terrains a mod brings |
@@ -79,6 +80,7 @@ world); the message says what to do.
 
 | File | What it is |
 |---|---|
+| `<World>.terrain.json`, `<World>.terrain.bin` | the terrain tiled for streaming: every height sample in a pyramid of levels (7.5, 15, 30 m ... apart on Altis), 128 x 128 cells a tile, each tile one byte range; what the ground is per sample (beach, low ground, slopes, rock, high ground, sea floor, roads); every placed object as a 20-byte record per square of about a kilometre. The viewer draws this one when it is there: the ground near the camera in full detail, coarser further off, loaded as you look round. Format: `heat3d_ext_arma3/terrain.py` |
 | `<World>.glb` | `ground:<World>` (the height grid, coloured by beach, low ground, slopes, rock, high ground), `water:<World>` (the sea), `road:<World>` (the road network), `structure:<World>` (placed objects as boxes) |
 | `<World>.json` | the world's name, display name, DLC, size, sample spacing and frame |
 | `<World>.layouts.json` | towns, military areas, other named places and airfields ([layouts](https://holdi601.github.io/3DHeat/level-layouts.html)) |

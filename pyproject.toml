@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "heat3d-ext-arma3"
-version = "0.5.0"
+version = "0.6.0"
 description = "Arma 3 terrains from your own install into 3DHeat levels: terrain, sea, roads, placed objects as boxes, towns and airfields, and the vehicle and weapon catalogue"
 readme = "README.md"
 license = { file = "LICENSE" }
