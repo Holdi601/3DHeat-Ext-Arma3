@@ -33,3 +33,5 @@ catalog.json
 .claude/
 *.jsonl
 *.log
+# the window's own images (logo, icons): ours, not game data
+!*/app/assets/*.png

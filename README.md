@@ -37,6 +37,16 @@ Levels go to `$HEAT3D_LEVELS/arma3/` when `HEAT3D_LEVELS` is set (the viewer's
 levels folder), else to `arma3/` where you run it; `--levels FOLDER` says
 where. A game outside the Steam libraries needs `--install "<Arma 3 folder>"`.
 
+## The standalone program
+
+No Python needed: the releases have `heat3d-arma3-<version>-windows-x64.zip` and `-linux-x64.tar.gz` (check them
+against `SHA256SUMS`). Started without arguments, `heat3d-arma3` opens a window that walks through four
+steps (find the game, choose the terrains, extract with progress and time left, done: open in 3DHeat)
+in the 3DHeat look, dark or light, and offers updates (it asks first). On Windows it opens only its
+window, with no console window; in a terminal it prints as usual, and `heat3d-arma3-cli.cmd` in the same
+folder makes the terminal wait for it. `heat3d-arma3 status --json`, `extract --new` and `--check --json`
+are for scripts; the 3DHeat app's Extractors panel installs, updates and runs it.
+
 ## Commands
 
 | Command | Does |
