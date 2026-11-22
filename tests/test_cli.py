@@ -48,9 +48,33 @@ def _install(root, world_version=25):
             "class Tank_F: Tank": {}, "class MBT_01_base_F: Tank_F": {"scope": 0},
             "class B_MBT_01_cannon_F: MBT_01_base_F": {"scope": 2, "displayName": "M2A1 Slammer", "side": 1,
                                                         "faction": "BLU_F", "model": "\\A3\\armor_f\\slammer.p3d"},
-            "class Man: Land": {"simulation": "soldier"}, "class B_Soldier_F: Man": {"scope": 2, "displayName": "Rifleman"},
+            "class Man: Land": {"simulation": "soldier"},
+            "class B_Soldier_F: Man": {"scope": 2, "displayName": "Rifleman", "side": 1, "faction": "BLU_F",
+                                       "linkedItems": ["V_PlateCarrier1_rgr", "H_HelmetB", "ItemMap"],
+                                       "uniformClass": "U_B_CombatUniform_mcam",
+                                       "class HitPoints": {"class HitChest": {"armor": 1, "passThrough": 0.8}}},
         },
-        "class CfgWeapons": {"class Rifle_Base_F": {"type": 1}, "class arifle_MX_F: Rifle_Base_F": {"scope": 2, "displayName": "MX 6.5 mm"}},
+        "class CfgWeapons": {
+            "class Rifle_Base_F": {"type": 1}, "class arifle_MX_F: Rifle_Base_F": {"scope": 2, "displayName": "MX 6.5 mm"},
+            "class ItemCore": {}, "class Vest_Camo_Base: ItemCore": {},
+            "class V_PlateCarrier1_rgr: Vest_Camo_Base": {"scope": 2, "displayName": "Carrier Lite (Green)", "class ItemInfo": {
+                "type": 701, "mass": 80, "class HitpointsProtectionInfo": {
+                    "class Chest": {"hitpointName": "HitChest", "armor": 16, "passThrough": 0.3}}}},
+            "class H_HelmetB: ItemCore": {"scope": 2, "displayName": "ECH", "class ItemInfo": {
+                "type": 605, "mass": 40, "class HitpointsProtectionInfo": {
+                    "class Head": {"hitpointName": "HitHead", "armor": 6, "passThrough": 0.5}}}},
+        },
+        "class CfgMagazines": {
+            "class CA_Magazine": {"scope": 0},
+            "class 30Rnd_65x39_caseless_mag: CA_Magazine": {"scope": 2, "displayName": "6.5 mm 30Rnd STANAG Mag",
+                                                         "displayNameShort": "6.5 mm", "ammo": "B_65x39_Caseless",
+                                                         "count": 30, "initSpeed": 800},
+        },
+        "class CfgAmmo": {
+            "class BulletBase": {"simulation": "shotBullet"},
+            "class B_65x39_Caseless: BulletBase": {"hit": 10, "caliber": 1, "typicalSpeed": 820},
+            "class B_Unused: BulletBase": {"hit": 99},
+        },
     })
     # as in the game: a config.bin per vehicle subfolder, none at the archive's root
     pbo.write_pbo(addons / "vehicles_f.pbo", {"mbt_01\\config.bin": vehicles}, {"prefix": "a3\\vehicles_f"})
@@ -173,9 +197,21 @@ def test_catalog(tmp_path, capsys):
     slammer = by_id["B_MBT_01_cannon_F"]
     assert slammer["name"] == "M2A1 Slammer" and slammer["key"] == "Merkava Mk IV"
     assert slammer["side"] == "west" and slammer["nation"] == "NATO" and slammer["class"] == "mbt" and slammer["domain"] == "ground"
-    assert "B_Soldier_F" not in by_id  # men are not vehicles
+    assert by_id["B_Soldier_F"]["kind"] == "man"  # men are not vehicles, but soldiers with their gear
     assert by_id["arifle_MX_F"]["class"] == "rifle"
     assert by_id["BLU_F"]["kind"] == "faction" and by_id["BLU_F"]["side"] == "west"
+    mag = by_id["30Rnd_65x39_caseless_mag"]
+    assert mag["kind"] == "magazine" and mag["short"] == "6.5 mm" and mag["ammo"] == "B_65x39_Caseless" and mag["initSpeed"] == 800
+    ammo = by_id["B_65x39_Caseless"]
+    assert ammo["kind"] == "ammo" and ammo["hit"] == 10 and ammo["caliber"] == 1 and ammo["typicalSpeed"] == 820
+    assert ammo["class"] == "bullet"
+    assert "B_Unused" not in by_id  # no magazine loads it
+    vest = by_id["V_PlateCarrier1_rgr"]
+    assert vest["kind"] == "vest" and vest["protection"]["HitChest"] == {"armor": 16, "passThrough": 0.3} and vest["mass"] == 80
+    assert by_id["H_HelmetB"]["kind"] == "helmet" and by_id["H_HelmetB"]["protection"]["HitHead"]["armor"] == 6
+    man = by_id["B_Soldier_F"]
+    assert man["kind"] == "man" and man["side"] == "west" and man["vest"] == "V_PlateCarrier1_rgr" and man["helmet"] == "H_HelmetB"
+    assert man["uniform"] == "U_B_CombatUniform_mcam" and man["body"]["HitChest"]["armor"] == 1
 
 
 def test_identify(tmp_path, capsys):

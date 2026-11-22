@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- The catalogue (`catalog`) also lists the ammunition with the game's damage numbers (`hit`, the penetration
+  factor `caliber`, `typicalSpeed`, indirect damage), the magazines (display and short name, ammunition, rounds,
+  muzzle speed), vests, headgear and uniforms with their armour per hit point (`armor`, `passThrough`) and the
+  soldiers with their default vest, headgear and uniform and the body's own armour, all read from your install.
+
 ## 0.3.0
 
 - Its own icon: the 3DHeat cube with a text badge for its game (letters in 3DHeat's colours), as the

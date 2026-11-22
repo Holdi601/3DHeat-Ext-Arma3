@@ -30,7 +30,7 @@ in). Arma 3 Tools are not needed.
 python -m pip install -e .        # from a checkout: installs heat3d-arma3-maps
 heat3d-arma3-maps                 # finds the game and says what is missing
 heat3d-arma3-maps all             # every terrain not extracted yet, or changed since
-heat3d-arma3-maps catalog         # vehicles, weapons and factions
+heat3d-arma3-maps catalog         # vehicles, weapons, factions, ammunition, magazines, vests, headgear, soldiers
 ```
 
 Levels go to `$HEAT3D_LEVELS/arma3/` when `HEAT3D_LEVELS` is set (the viewer's
@@ -57,7 +57,7 @@ are for scripts; the 3DHeat app's Extractors panel installs, updates and runs it
 | `world <world>` | one terrain as `<World>.glb`, `<World>.json` and `<World>.layouts.json` |
 | `all [--force]` | every terrain `status` does not call current |
 | `layouts <world>` | only the places, as `<World>.layouts.json` |
-| `catalog [-o FILE]` | vehicles, weapons and factions as `catalog.json` |
+| `catalog [-o FILE]` | vehicles, weapons, factions, ammunition, magazines, vests, headgear, uniforms and soldiers as `catalog.json` |
 | `identify <file>` | what an Arma 3 file is: archive, config, terrain or model |
 
 | `world` / `all` option | Does |
@@ -78,7 +78,7 @@ world); the message says what to do.
 | `<World>.json` | the world's name, display name, DLC, size, sample spacing and frame |
 | `<World>.layouts.json` | towns, military areas, other named places and airfields ([layouts](https://holdi601.github.io/3DHeat/level-layouts.html)) |
 | `manifest.json` | every level written: id, game build, the fingerprints of the archives it came from, extractor and level-format version, files |
-| `catalog.json` | class name, display name, side, faction, kind, domain, model and the real vehicle each stands for |
+| `catalog.json` | class name, display name, side, faction, kind, domain, model and the real vehicle each stands for; ammunition with its damage numbers (`hit`, `caliber`, `typicalSpeed`), magazines (ammunition, rounds, muzzle speed), vests, headgear and uniforms with their armour per hit point (`protection`), soldiers with their default vest, headgear and uniform |
 
 **Frame:** metres, x east, y up, z south, origin the terrain's south-west
 corner: Arma's own world metres with north turned to -z, so a recording's
