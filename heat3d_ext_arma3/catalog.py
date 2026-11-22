@@ -68,7 +68,8 @@ SIM_KIND = {"tankx": ("ground", "tracked"), "carx": ("ground", "wheeled"), "heli
 ANCESTOR_KIND = [  # first match up the class chain wins
     ("staticmortar", "mortar"), ("staticaaweapon", "static-aa"), ("staticatweapon", "static-at"),
     ("staticcannon", "artillery"), ("staticmgweapon", "static-mg"), ("staticweapon", "static"),
-    ("ugv_01_base_f", "ugv"), ("uav", "uav"), ("tank", "mbt"), ("wheeled_apc_f", "apc"), ("apc_tracked", "ifv"),
+    ("ugv_01_base_f", "ugv"), ("ugv_02_base_f", "ugv"), ("uav", "uav"), ("tank", "mbt"), ("wheeled_apc_f", "apc"),
+    ("apc_tracked", "ifv"),
     ("truck_f", "truck"), ("mrap", "car"), ("car", "car"), ("helicopter", "heli-transport"), ("plane", "plane"),
     ("ship", "boat"),
 ]

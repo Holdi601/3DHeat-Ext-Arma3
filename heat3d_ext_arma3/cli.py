@@ -7,9 +7,11 @@ heat3d-arma3-maps all [...]            every terrain status calls new, changed, 
 heat3d-arma3-maps layouts <world>      only the places (towns, military, airfields)
 heat3d-arma3-maps catalog [-o FILE]    vehicles, weapons and factions as catalog.json
 heat3d-arma3-maps identify <file>      what an Arma 3 file is (PBO, config, terrain, model)
+heat3d-arma3-maps models [ids] [...]   the vehicles' models as a local model pack (model-pack.json, .glb, hit-parts.json)
+heat3d-arma3-maps models --check --json   how many vehicles the pack has, which are missing or out of date
 
 heat3d-arma3-maps extract [ids] [--new] [--changed] [--outdated] [--progress-json]
-                                       what the 3DHeat extractors manager runs
+                                       what the 3DHeat extractors manager runs (--models: the model pack)
 
 Common options: --install FOLDER (the Arma 3 folder, when it is not found by itself), --mod FOLDER (also read a mod
 folder; repeatable), --levels FOLDER (where levels go; default $HEAT3D_LEVELS/arma3, else ./arma3).
@@ -190,10 +192,59 @@ def cmd_all(args) -> int:
     return worst
 
 
+def models_folder(args) -> Path:
+    if getattr(args, "out", None):
+        return Path(args.out)
+    root = os.environ.get("HEAT3D_LEVELS", "").strip()
+    return Path(root, "model-packs", GAME) if root else Path("model-packs", GAME)
+
+
+def cmd_models(args) -> int:
+    """The vehicles' models as a local model pack; `--check` only says what the pack has."""
+    from . import models
+    from .manifest import Progress
+
+    progress = Progress(getattr(args, "progress_json", False))
+    game = _open(args)
+    if game is None:
+        progress.fail("Arma 3 not found")
+        return 2
+    out = models_folder(args)
+    source = f"{PROG} {__version__}"
+    if args.check:
+        doc = models.check(game, out, source)
+        if args.json:
+            print(json.dumps(doc, indent=1, ensure_ascii=False))
+        else:
+            print(f"model pack {out}: {doc['models']} of {doc['vehicles']} vehicles, {len(doc['outdated'])} out of date, "
+                  f"{len(doc['missing'])} missing")
+            for kind, row in sorted(doc["kinds"].items()):
+                print(f"  {kind:<16} {row['models']:>4} of {row['vehicles']:<4}")
+        return 0 if not doc["missing"] and not doc["outdated"] else 1
+    quiet = args.progress_json or args.json
+    rep = models.export_pack(game, out, source, wanted=args.ids or None, force=args.force,
+                             progress=progress if args.progress_json else None, log=None if quiet else print)
+    cov = rep["coverage"]
+    if args.json:
+        print(json.dumps({"out": str(out), "written": len(rep["ok"]), "unchanged": len(rep["unchanged"]),
+                          "failed": rep["failed"], "bytes": rep["bytes"], "seconds": rep["seconds"], "coverage": cov},
+                         indent=1, ensure_ascii=False))
+    elif not args.progress_json:
+        print(f"{len(rep['ok'])} written, {len(rep['unchanged'])} unchanged, {len(rep['failed'])} failed; "
+              f"{rep['bytes'] / 1e6:.0f} MB in {rep['seconds']:.0f} s -> {out}")
+        print(f"pack: {cov['models']} of {cov['vehicles']} vehicles")
+        for uid, why in sorted(rep["failed"].items()):
+            print(f"  failed {uid}: {why}")
+    return progress.done() if args.progress_json else (1 if rep["failed"] and not rep["ok"] else 0)
+
+
 def cmd_extract(args) -> int:
     """The extractors manager's verb: maps by state (--new, --changed, --outdated) or by id, one JSON line each."""
     from .manifest import Progress, pick, status
 
+    if args.models:
+        args.ids, args.check, args.json = args.maps, False, False
+        return cmd_models(args)
     progress = Progress(args.progress_json)
     if args.game_key and args.game_key != GAME:
         progress.fail(f"no game {args.game_key!r} here; this tool reads {GAME}")
@@ -361,6 +412,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--changed", action="store_true")
     p.add_argument("--outdated", action="store_true")
     p.add_argument("--progress-json", action="store_true", help="one JSON line per event (start, map, done)")
+    p.add_argument("--models", action="store_true", help="the vehicles' model pack instead of maps (ids: vehicle classes)")
+    p.add_argument("--force", action="store_true", help="with --models: rebuild every model, current or not")
+    p.add_argument("--out", help="with --models: the pack folder (default $HEAT3D_LEVELS/model-packs/arma3)")
     p.set_defaults(run=cmd_extract)
     p = sub.add_parser("layouts", parents=[common], help="only a world's places as <World>.layouts.json")
     p.add_argument("world")
@@ -368,6 +422,14 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("catalog", parents=[common], help="vehicles, weapons and factions as catalog.json")
     p.add_argument("-o", "--out", help="the .json (default <levels>/catalog.json)")
     p.set_defaults(run=cmd_catalog)
+    p = sub.add_parser("models", parents=[common], help="the vehicles' models as a local model pack")
+    p.add_argument("ids", nargs="*", help="only these vehicle classes (default: every one)")
+    p.add_argument("--out", help="the pack folder (default $HEAT3D_LEVELS/model-packs/arma3, else ./model-packs/arma3)")
+    p.add_argument("--force", action="store_true", help="rebuild every model, current or not")
+    p.add_argument("--check", action="store_true", help="write nothing; say how many vehicles the pack has")
+    p.add_argument("--json", action="store_true", help="the report as JSON")
+    p.add_argument("--progress-json", action="store_true", help="one JSON line per vehicle (start, map, done)")
+    p.set_defaults(run=cmd_models)
     p = sub.add_parser("identify", help="what an Arma 3 file is")
     p.add_argument("path", type=Path)
     p.set_defaults(run=cmd_identify)

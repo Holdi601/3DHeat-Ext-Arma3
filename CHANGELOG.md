@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- What's new: your Arma 3 vehicles in their own shape in 3DHeat. `heat3d-arma3-maps models` (or "Vehicle models" in
+  the window) writes every vehicle of your install - tanks, APCs, cars, helicopters, planes, boats, static weapons -
+  as a local model pack: true size, turret and gun on their joints, rotors, wheels and tracks, plain colours, and
+  the hit zones of each hit point. `models --check --json` says what the pack covers; `extract --models
+  --progress-json` builds it for the extractors manager.
+- A reader of binarised models (ODOL version 73): levels of detail, faces, sections, selections, skinning,
+  skeleton and the model.cfg animations.
+- The catalogue calls the ED-1 robots unmanned ground vehicles (they were tanks).
+
 ## 0.4.0
 
 - The catalogue (`catalog`) also lists the ammunition with the game's damage numbers (`hit`, the penetration

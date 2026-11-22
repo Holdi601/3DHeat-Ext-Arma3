@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import __version__
-from .app.spec import Check, GameSpec, MapSource, Spec
+from .app.spec import Check, GameSpec, Input, MapSource, Spec, Task
 
 
 def _find(given: str | None) -> Path | None:
@@ -51,6 +51,12 @@ def _build(root: Path) -> str | None:
     return install.build if install else None
 
 
+def _models_folder(levels: Path) -> Path:
+    """Model packs sit beside the games' level folders: `<levels>/model-packs/arma3`."""
+    base = levels.parent if levels.name.lower() == "arma3" else levels
+    return base / "model-packs" / "arma3"
+
+
 def _checks(found: dict, levels: Path) -> list[Check]:
     root = found.get("arma3")
     if root is None:
@@ -69,7 +75,7 @@ SPEC = Spec(
     version=__version__,
     tools={"heat3d-arma3-maps": "heat3d_ext_arma3.cli:main"},
     default_tool="heat3d-arma3-maps",
-    description="Arma 3 terrains, their places and the game's catalogue as 3D levels for the 3DHeat viewer",
+    description="Arma 3 terrains, their places, the game's catalogue and its vehicles' models for the 3DHeat viewer",
     module="heat3d_ext_arma3.standalone_spec",
     games=[GameSpec(
         key="arma3", label="Arma 3", find=_find, subdir="arma3", build=_build,
@@ -79,6 +85,14 @@ SPEC = Spec(
         platforms=("windows-x64", "linux-x64"),
     )],
     checks=_checks,
+    tasks=[Task(
+        id="models", label="Vehicle models",
+        inputs=[Input("out", "Model pack folder", default=lambda levels: str(_models_folder(levels)),
+                      hint="model-packs/arma3 in the viewer's levels folder; only vehicles new or changed are built")],
+        argv=lambda v, levels: ["heat3d-arma3-maps", "models", "--out", v.get("out") or str(_models_folder(levels))],
+        help="Every vehicle of your install in its own shape and true size, with its turret, gun, rotors and hit "
+             "zones, for 3DHeat to draw in place of a stand-in figure. Stays on this computer.",
+        action="Build the models")],
     min_free_gb=4.0,
     notice="Not affiliated with or endorsed by Bohemia Interactive.",
 )
