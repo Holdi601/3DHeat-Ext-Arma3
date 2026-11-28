@@ -1,7 +1,8 @@
 """
 The standalone app's description of this tool (app/spec.py): the Arma 3 install it reads, its terrains as maps (new
 ones after an update or a new DLC are found by app/manifest.py), and how one terrain becomes a level with its
-layouts. `python -m heat3d_ext_arma3.standalone_spec` runs the app from a checkout; the release executables run
+layouts; its other content (the catalogue, the vehicle model pack) and the catalogue's item ids, so new
+vehicles, weapons and equipment after an update are noticed. `python -m heat3d_ext_arma3.standalone_spec` runs the app from a checkout; the release executables run
 the same.
 """
 
@@ -57,6 +58,86 @@ def _models_folder(levels: Path) -> Path:
     return base / "model-packs" / "arma3"
 
 
+# ------------------------------------------------------------------ content (catalogue, model pack)
+
+CONTENT = {"catalog": ("catalog", "Vehicles, weapons, equipment and soldiers"), "models": ("models", "Vehicle models")}
+
+
+def _content_source(cid: str, title: str, sources: list[Path], kind: str) -> MapSource:
+    """A MapSource of another kind than a map (the kit's `kind` field; set by hand on a kit that predates it)."""
+    try:
+        return MapSource(cid, title, sources, kind=kind)  # type: ignore[call-arg]
+    except TypeError:
+        m = MapSource(cid, title, sources)
+        m.kind = kind  # type: ignore[attr-defined]
+        return m
+
+
+def _signatures(game) -> list[Path]:
+    """What the catalogue and the model pack are read from, cheaply: every readable archive's signature file
+    (a few hundred bytes that change with the archive), the archive itself where it has none."""
+    out = []
+    for pbo in game.fs.pbos:
+        sigs = sorted(pbo.path.parent.glob(pbo.path.name + ".*.bisign"))
+        out.append(sigs[0] if sigs else pbo.path)
+    return sorted(out, key=lambda p: str(p).lower())
+
+
+def _contents(root: Path) -> list[MapSource]:
+    game = _game(root)
+    if game is None:
+        return []
+    sources = _signatures(game)
+    return [_content_source(cid, title, sources, kind) for cid, (kind, title) in CONTENT.items()]
+
+
+def _extract_content(root: Path, m: MapSource, out: Path, log) -> list[Path]:
+    from . import cli
+
+    if m.id == "catalog":
+        target = Path(out) / "catalog.json"
+        code = cli.main(["catalog", "--install", str(root), "--levels", str(out), "-o", str(target)])
+        if code != 0:
+            raise RuntimeError(f"heat3d-arma3-maps catalog exited {code}")
+        return [target]
+    if m.id == "models":
+        folder = _models_folder(Path(out))
+        code = cli.main(["models", "--install", str(root), "--out", str(folder)])
+        if code != 0:
+            raise RuntimeError(f"heat3d-arma3-maps models exited {code}")
+        return [p for p in (folder / "model-pack.json",) if p.is_file()]
+    raise KeyError(f"no such content: {m.id}")
+
+
+def _catalog_items(root: Path) -> dict[str, list[str]]:
+    """Every catalogue id of the install by its kind (vehicle, weapon, ammo, magazine, equipment, backpack ...)."""
+    from . import catalog
+
+    game = _game(root)
+    if game is None:
+        return {}
+    out: dict[str, list[str]] = {}
+    for item in catalog.build(game):
+        out.setdefault(item["kind"], []).append(item["id"])
+    return {k: sorted(v) for k, v in sorted(out.items())}
+
+
+def _adopt(root: Path, m: MapSource, out: Path):
+    from .track import adopt
+
+    return adopt(root, m, out)
+
+
+def _game_spec(**hooks) -> GameSpec:
+    """The game, with the content hooks set whether or not this copy of the kit declares them yet."""
+    known = {k: v for k, v in hooks.items() if k in GameSpec.__dataclass_fields__}
+    g = GameSpec(**known)
+    for k, v in hooks.items():
+        if k not in known:
+            setattr(g, k, v)
+    return g
+
+
 def _checks(found: dict, levels: Path) -> list[Check]:
     root = found.get("arma3")
     if root is None:
@@ -77,12 +158,13 @@ SPEC = Spec(
     default_tool="heat3d-arma3-maps",
     description="Arma 3 terrains, their places, the game's catalogue and its vehicles' models for the 3DHeat viewer",
     module="heat3d_ext_arma3.standalone_spec",
-    games=[GameSpec(
+    games=[_game_spec(
         key="arma3", label="Arma 3", find=_find, subdir="arma3", build=_build,
         maps=_maps, extract=_extract,
         existing_outputs=lambda out, m: [out / f"{m.id}.glb"],
         output_version="0.1.0",
         platforms=("windows-x64", "linux-x64"),
+        contents=_contents, extract_content=_extract_content, catalog_items=_catalog_items, adopt=_adopt,
     )],
     checks=_checks,
     tasks=[Task(

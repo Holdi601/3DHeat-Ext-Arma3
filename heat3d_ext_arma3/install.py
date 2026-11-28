@@ -158,6 +158,16 @@ def _program_date(root: Path) -> str:
     return "unknown"
 
 
+def _build_of(root: Path) -> str:
+    """The Steam build id when the folder sits in a Steam library (`steamapps/common/<folder>`), else the program's
+    date: the same answer whether the install was found or given."""
+    if root.parent.name.lower() == "common" and root.parent.parent.name.lower() == "steamapps":
+        info = _manifest(root.parent.parent.parent, ARMA3_APP)
+        if info.get("buildid") and info.get("installdir", "").lower() == root.name.lower():
+            return info["buildid"]
+    return _program_date(root)
+
+
 def find_install(given: str | Path | None = None) -> tuple[Install | None, list[str]]:
     """The install, and what was looked at (for the message when there is none)."""
     looked: list[str] = []
@@ -166,7 +176,7 @@ def find_install(given: str | Path | None = None) -> tuple[Install | None, list[
             p = Path(path)
             looked.append(f"{label} {p}")
             if _is_game(p):
-                return Install(p, _program_date(p), label), looked
+                return Install(p, _build_of(p), label), looked
     found = steam_app(ARMA3_APP, FOLDER)
     looked.append("Steam libraries: " + (", ".join(str(lib) for lib in libraries()) or "none found"))
     if found and _is_game(found[0]):
@@ -175,7 +185,7 @@ def find_install(given: str | Path | None = None) -> tuple[Install | None, list[
     if reg is not None:
         looked.append(f"registry entry {reg}" + ("" if reg.is_dir() else " (that folder is gone)"))
         if _is_game(reg):
-            return Install(reg, _program_date(reg), "registry"), looked
+            return Install(reg, _build_of(reg), "registry"), looked
     return None, looked
 
 

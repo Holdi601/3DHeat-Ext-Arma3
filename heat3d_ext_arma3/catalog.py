@@ -1,6 +1,7 @@
 """
-Arma 3's catalogue as `catalog.json`: every public vehicle, weapon and faction of the configuration, and the
-ammunition, magazines, vests, headgear, uniforms and soldiers with the game's damage and armour numbers.
+Arma 3's catalogue as `catalog.json`: every public vehicle, weapon and faction of the configuration, the
+ammunition, magazines, vests, headgear, uniforms and soldiers with the game's damage and armour numbers, and the
+equipment a soldier carries (binoculars, night vision, radios, medical kits, attachments, backpacks, facewear).
 
 * Vehicles: `CfgVehicles` classes with `scope = 2` that are vehicles (land, air, sea, static weapons; men are left
   out), each with its class name (the id recordings use), display name, side (`west`, `east`, `guer`, `civ`), faction
@@ -18,6 +19,14 @@ ammunition, magazines, vests, headgear, uniforms and soldiers with the game's da
 * Vests, headgear and uniforms (`kind` `vest`, `helmet`, `uniform`): public `CfgWeapons` items by their `ItemInfo`
   type (701, 605, 801), with their armour per hit point (`protection`: `HitChest` -> `armor`, `passThrough`, from
   `ItemInfo >> HitpointsProtectionInfo`) and mass.
+* Equipment (`kind` `equipment`): public `CfgWeapons` items a soldier carries that are no weapon and no clothing,
+  by their `simulation`, `ItemInfo` type and base classes: binoculars, rangefinders, laser designators, night vision,
+  map, compass, watch, radio, GPS, UAV terminal, first aid kit, medikit, toolkit, mine detector (`class`).
+* Weapon attachments (`kind` `attachment`): public `CfgWeapons` muzzles, optics, side rails and bipods
+  (`ItemInfo` type 101, 201, 301, 302).
+* Backpacks (`kind` `backpack`): public `CfgVehicles` classes with `isBackpack = 1`, with their load (`maximumLoad`)
+  and mass; a backpack that packs a static weapon or a drone says what it assembles (`assembles`).
+* Facewear (`kind` `glasses`): public `CfgGlasses` classes (goggles, balaclavas, bandanas, masks).
 * Soldiers (`kind` `man`): public `CfgVehicles` men with their side, faction, default vest, headgear and uniform (from
   `linkedItems` and `uniformClass`) and the body's own armour per hit point (`HitPoints`).
 """
@@ -118,7 +127,7 @@ def vehicles(game: Game) -> list[dict]:
     factions = game.config.child("CfgFactionClasses")
     out = []
     for cls in (cfg.children() if cfg else []):
-        if cls.get("scope") != 2 or _is_man(cls):
+        if cls.get("scope") != 2 or _is_man(cls) or cls.get("isBackpack") == 1:
             continue
         sim = str(cls.get("simulation", "")).lower()
         names = " ".join(n.lower() for n in cls.ancestors())
@@ -307,6 +316,79 @@ def gear(game: Game) -> list[dict]:
     return out
 
 
+#: `ItemInfo >> type` of a weapon attachment; of the carried items that have one.
+ATTACHMENT_TYPE = {101: "muzzle", 201: "optic", 301: "pointer", 302: "bipod"}
+ITEM_TYPE = {401: "first-aid", 616: "nvg", 619: "medikit", 620: "uav-terminal", 621: "uav-terminal"}
+#: Equipment by the class's `simulation`.
+ITEM_SIMULATION = {"itemmap": "map", "itemcompass": "compass", "itemwatch": "watch", "itemradio": "radio",
+                   "itemgps": "gps", "nvgoggles": "nvg", "binocular": "binocular", "itemminedetector": "mine-detector"}
+#: Equipment by a base class name (first match up the chain wins): what the simulation does not tell apart.
+ITEM_ANCESTOR = [("laserdesignator", "laser-designator"), ("rangefinder", "rangefinder"), ("medikit", "medikit"),
+                 ("toolkit", "toolkit"), ("firstaidkit", "first-aid"), ("minedetector", "mine-detector"),
+                 ("uavterminal", "uav-terminal"), ("itemgps", "gps"), ("nvgoggles", "nvg"), ("binocular", "binocular"),
+                 ("itemmap", "map"), ("itemcompass", "compass"), ("itemwatch", "watch"), ("itemradio", "radio")]
+
+
+def equipment(game: Game) -> list[dict]:
+    """Carried items and weapon attachments of `CfgWeapons` (not clothing: that is `gear`)."""
+    cfg = game.config.child("CfgWeapons")
+    out = []
+    for cls in (cfg.children() if cfg else []):
+        if cls.get("scope") != 2:
+            continue
+        info = cls.child("ItemInfo")
+        itype = info.get("type") if info else None
+        if itype in GEAR_TYPE:
+            continue
+        chain = [n.lower() for n in cls.ancestors()]
+        sim = str(cls.get("simulation", "") or "").lower()
+        kind, what = "equipment", None
+        if itype in ATTACHMENT_TYPE:
+            kind, what = "attachment", ATTACHMENT_TYPE[itype]
+        else:
+            what = next((k for stem, k in ITEM_ANCESTOR if any(stem in n for n in chain)), None)
+            what = what or ITEM_SIMULATION.get(sim) or ITEM_TYPE.get(itype)
+        if what is None:
+            continue
+        name = game.text(cls.get("displayName", "")) or cls.name
+        item = {"id": cls.name, "kind": kind, "name": name, "class": what, "key": name}
+        if info:
+            _put(item, "mass", info.get("mass"))
+        out.append(item)
+    return out
+
+
+def backpacks(game: Game) -> list[dict]:
+    cfg = game.config.child("CfgVehicles")
+    out = []
+    for cls in (cfg.children() if cfg else []):
+        if cls.get("scope") != 2 or cls.get("isBackpack") != 1:
+            continue
+        name = game.text(cls.get("displayName", "")) or cls.name
+        item = {"id": cls.name, "kind": "backpack", "name": name, "class": "backpack", "key": name}
+        _put(item, "maximumLoad", cls.get("maximumLoad"))
+        _put(item, "mass", cls.get("mass"))
+        assembly = cls.child("assembleInfo")
+        target = assembly.get("assembleTo") if assembly else None
+        if isinstance(target, str) and target:
+            item["assembles"] = target
+        out.append(item)
+    return out
+
+
+def glasses(game: Game) -> list[dict]:
+    cfg = game.config.child("CfgGlasses")
+    out = []
+    for cls in (cfg.children() if cfg else []):
+        if cls.get("scope") != 2:
+            continue
+        name = game.text(cls.get("displayName", "")) or cls.name
+        item = {"id": cls.name, "kind": "glasses", "name": name, "class": "glasses", "key": name}
+        _put(item, "mass", cls.get("mass"))
+        out.append(item)
+    return out
+
+
 def men(game: Game, vests: set[str], helmets: set[str]) -> list[dict]:
     cfg = game.config.child("CfgVehicles")
     factions_cfg = game.config.child("CfgFactionClasses")
@@ -352,5 +434,6 @@ def build(game: Game) -> list[dict]:
     vests = {i["id"].lower() for i in kit if i["kind"] == "vest"}
     helmets = {i["id"].lower() for i in kit if i["kind"] == "helmet"}
     ammo = ammunition(game, {m["ammo"].lower() for m in mags})
-    items = vehicles(game) + weapons(game) + factions(game) + mags + ammo + kit + men(game, vests, helmets)
+    items = (vehicles(game) + weapons(game) + factions(game) + mags + ammo + kit + equipment(game) + backpacks(game)
+             + glasses(game) + men(game, vests, helmets))
     return sorted(items, key=lambda i: (i["kind"], i["id"].lower()))

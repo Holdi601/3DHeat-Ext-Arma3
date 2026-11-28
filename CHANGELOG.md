@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0
+
+- What's new: the catalogue also lists what a soldier carries: binoculars, rangefinders, laser designators, night
+  vision, map, compass, watch, radio, GPS, UAV terminals, first aid kits, medikits, toolkits and mine detectors
+  (`kind` `equipment`), weapon attachments - suppressors, optics, side rails, bipods (`attachment`), backpacks with
+  their load and what they assemble (`backpack`) and facewear (`glasses`). Grenades, mines and explosives stay
+  magazines with their ammunition.
+- The extractors manager notices new content: the catalogue and the vehicle model pack are content of their own
+  (new after an update, current otherwise), and it compares the catalogue's item ids with the install's, so new
+  vehicles, weapons and equipment after an update are found.
+- Terrains extracted from the command line (`world`, `all`) are recorded for the extractors manager too; `track`
+  records terrains extracted before that, so the window no longer calls current terrains "made by an older
+  version". It writes only that record, never a level.
+- The game build is the Steam build id also when the Arma 3 folder is given (it was the program's date then).
+
 ## 0.6.0
 
 - What's new: big terrains load in seconds. Each terrain is also written tiled (`<World>.terrain.json` +

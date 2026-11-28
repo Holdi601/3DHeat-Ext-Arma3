@@ -5,7 +5,8 @@ heat3d-arma3-maps worlds               the terrains, with their world names (wha
 heat3d-arma3-maps world <world> [...]  one terrain as a level (<World>.glb, .json, .layouts.json)
 heat3d-arma3-maps all [...]            every terrain status calls new, changed, outdated or missing
 heat3d-arma3-maps layouts <world>      only the places (towns, military, airfields)
-heat3d-arma3-maps catalog [-o FILE]    vehicles, weapons and factions as catalog.json
+heat3d-arma3-maps catalog [-o FILE]    vehicles, weapons, equipment and factions as catalog.json
+heat3d-arma3-maps track                record terrains extracted before the app kept a record
 heat3d-arma3-maps identify <file>      what an Arma 3 file is (PBO, config, terrain, model)
 heat3d-arma3-maps models [ids] [...]   the vehicles' models as a local model pack (model-pack.json, .glb, hit-parts.json)
 heat3d-arma3-maps models --check --json   how many vehicles the pack has, which are missing or out of date
@@ -150,6 +151,9 @@ def _export_one(game, world, args, folder: Path) -> int:
     record(folder, GAME, PROG, __version__, LEVEL_FORMAT, world.id, build=game.install.build,
            sources=[{"path": str(p.path), "hash": p.fingerprint} for p in world.sources(game.fs)], files=files,
            worldName=world.id, wrp=world.wrp, dlc=world.dlc_name, name=world.name)
+    from .track import kit_record
+
+    kit_record(game, world, folder, files, __version__)
     print(f"{world.id} -> {files[0]}")
     print(f"  ground     {report.ground:>10,} triangles, {report.size:,.0f} m square, {report.spacing:g} m apart")
     print(f"  water      {report.water:>10,} triangles")
@@ -195,6 +199,18 @@ def cmd_all(args) -> int:
     if not todo:
         print("every terrain is extracted and current")
     return worst
+
+
+def cmd_track(args) -> int:
+    """The extractors manager's record for terrains extracted before it kept one (writes only that record)."""
+    from .track import track
+
+    game = _open(args)
+    if game is None:
+        return 2
+    done = track(game, levels_folder(args))
+    print(f"{len(done)} terrains recorded" if done else "nothing to record: every extracted terrain is recorded")
+    return 0
 
 
 def models_folder(args) -> Path:
@@ -427,7 +443,10 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("layouts", parents=[common], help="only a world's places as <World>.layouts.json")
     p.add_argument("world")
     p.set_defaults(run=cmd_layouts)
-    p = sub.add_parser("catalog", parents=[common], help="vehicles, weapons and factions as catalog.json")
+    p = sub.add_parser("track", parents=[common],
+                       help="record terrains extracted before the extractors manager kept a record (writes no level)")
+    p.set_defaults(run=cmd_track)
+    p = sub.add_parser("catalog", parents=[common], help="vehicles, weapons, equipment and factions as catalog.json")
     p.add_argument("-o", "--out", help="the .json (default <levels>/catalog.json)")
     p.set_defaults(run=cmd_catalog)
     p = sub.add_parser("models", parents=[common], help="the vehicles' models as a local model pack")

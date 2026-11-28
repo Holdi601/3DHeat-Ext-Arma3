@@ -48,6 +48,9 @@ def _install(root, world_version=25):
             "class Tank_F: Tank": {}, "class MBT_01_base_F: Tank_F": {"scope": 0},
             "class B_MBT_01_cannon_F: MBT_01_base_F": {"scope": 2, "displayName": "M2A1 Slammer", "side": 1,
                                                         "faction": "BLU_F", "model": "\\A3\\armor_f\\slammer.p3d"},
+            "class Bag_Base: Land": {"isBackpack": 1, "scope": 0},
+            "class B_AssaultPack_rgr: Bag_Base": {"scope": 2, "displayName": "Assault Pack (Green)", "maximumLoad": 160,
+                                                  "mass": 20},
             "class Man: Land": {"simulation": "soldier"},
             "class B_Soldier_F: Man": {"scope": 2, "displayName": "Rifleman", "side": 1, "faction": "BLU_F",
                                        "linkedItems": ["V_PlateCarrier1_rgr", "H_HelmetB", "ItemMap"],
@@ -60,10 +63,18 @@ def _install(root, world_version=25):
             "class V_PlateCarrier1_rgr: Vest_Camo_Base": {"scope": 2, "displayName": "Carrier Lite (Green)", "class ItemInfo": {
                 "type": 701, "mass": 80, "class HitpointsProtectionInfo": {
                     "class Chest": {"hitpointName": "HitChest", "armor": 16, "passThrough": 0.3}}}},
+            "class ItemMap: ItemCore": {"scope": 2, "displayName": "Map", "simulation": "ItemMap"},
+            "class Binocular": {"scope": 2, "displayName": "Binoculars", "type": 4096, "simulation": "Binocular"},
+            "class Laserdesignator: Binocular": {"scope": 2, "displayName": "Laser Designator"},
+            "class NVGoggles: Binocular": {"scope": 2, "displayName": "NV Goggles", "simulation": "NVGoggles",
+                                           "class ItemInfo": {"type": 616, "mass": 20}},
+            "class muzzle_snds_H: ItemCore": {"scope": 2, "displayName": "Sound Suppressor (6.5 mm)",
+                                              "class ItemInfo": {"type": 101, "mass": 8}},
             "class H_HelmetB: ItemCore": {"scope": 2, "displayName": "ECH", "class ItemInfo": {
                 "type": 605, "mass": 40, "class HitpointsProtectionInfo": {
                     "class Head": {"hitpointName": "HitHead", "armor": 6, "passThrough": 0.5}}}},
         },
+        "class CfgGlasses": {"class None": {"scope": 0}, "class G_Combat: None": {"scope": 2, "displayName": "Combat Goggles"}},
         "class CfgMagazines": {
             "class CA_Magazine": {"scope": 0},
             "class 30Rnd_65x39_caseless_mag: CA_Magazine": {"scope": 2, "displayName": "6.5 mm 30Rnd STANAG Mag",
@@ -225,6 +236,15 @@ def test_catalog(tmp_path, capsys):
     man = by_id["B_Soldier_F"]
     assert man["kind"] == "man" and man["side"] == "west" and man["vest"] == "V_PlateCarrier1_rgr" and man["helmet"] == "H_HelmetB"
     assert man["uniform"] == "U_B_CombatUniform_mcam" and man["body"]["HitChest"]["armor"] == 1
+    # what a soldier carries besides weapons and clothing
+    assert (by_id["ItemMap"]["kind"], by_id["ItemMap"]["class"]) == ("equipment", "map")
+    assert by_id["Binocular"]["class"] == "binocular" and by_id["Laserdesignator"]["class"] == "laser-designator"
+    assert by_id["NVGoggles"]["class"] == "nvg" and by_id["NVGoggles"]["mass"] == 20
+    assert (by_id["muzzle_snds_H"]["kind"], by_id["muzzle_snds_H"]["class"]) == ("attachment", "muzzle")
+    pack = by_id["B_AssaultPack_rgr"]
+    assert pack["kind"] == "backpack" and pack["maximumLoad"] == 160 and "Bag_Base" not in by_id
+    assert by_id["G_Combat"]["kind"] == "glasses" and "None" not in by_id
+    assert by_id["arifle_MX_F"]["kind"] == "weapon" and "Binocular" not in {i["id"] for i in items if i["kind"] == "weapon"}
 
 
 def test_identify(tmp_path, capsys):
